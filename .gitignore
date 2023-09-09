@@ -1,0 +1,13 @@
+.DS_Store
+*.swp
+*.swo
+dist/
+build/
+!build/.gitkeep
+node_modules/
+coverage/
+config/local.yaml
+lib/
+tsconfig.tsbuildinfo
+*.out
+.idea

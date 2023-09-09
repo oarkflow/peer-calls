@@ -1,0 +1,69 @@
+extends:
+  - eslint:recommended
+  - plugin:react/recommended
+  - plugin:@typescript-eslint/eslint-recommended
+  - plugin:@typescript-eslint/recommended
+plugins:
+  - import
+settings:
+  react:
+    version: 'detect'
+rules:
+  max-len:
+    - error
+    - code: 80
+      ignorePattern: '^import .* from '
+  comma-dangle:
+    - error
+    - arrays: always-multiline
+      objects: always-multiline
+      imports: always-multiline
+      exports: always-multiline
+      functions: always-multiline
+
+  semi:
+    - error
+    - never
+  quotes:
+    - error
+    - single
+    - allowTemplateLiterals: true
+  # interface-name-prefix:
+  'import/no-extraneous-dependencies': off
+  '@typescript-eslint/member-delimiter-style':
+    - error
+    - multiline:
+        delimiter: none
+      singleline:
+        delimiter: comma
+  '@typescript-eslint/no-unused-vars':
+    - error
+    - vars: all
+      args: none
+      ignoreRestSiblings: true
+  '@typescript-eslint/explicit-module-boundary-types': off
+  '@typescript-eslint/no-non-null-assertion': off
+  '@typescript-eslint/no-use-before-define': off
+  '@typescript-eslint/no-empty-interface': off
+  '@typescript-eslint/no-explicit-any':
+    - error
+    - ignoreRestArgs: true
+  '@typescript-eslint/triple-slash-reference':
+    - error
+    - path: always
+  '@typescript-eslint/no-empty-function': off
+overrides:
+  - files:
+      - '*.test.ts'
+      - '*.test.tsx'
+      - '**/__mocks__/*.ts'
+      - '**/__mocks__/*.tsx'
+    rules:
+      '@typescript-eslint/no-explicit-any': off
+  - files:
+      - '*.js'
+    rules:
+      '@typescript-eslint/no-var-requires': off
+    env:
+      node: true
+      es6: true

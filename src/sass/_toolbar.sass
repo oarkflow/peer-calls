@@ -1,0 +1,225 @@
+.toolbar
+  visibility: visible
+  opacity: 1
+  transition: opacity 200ms ease-in 0ms, visibility 0ms ease-in 0ms
+
+  &.toolbar-hidden
+    opacity: 0
+    visibility: hidden
+    transition: opacity 200ms ease-in 0ms, visibility 0ms ease-in 200ms
+
+  .encryption-wrapper
+    position: relative
+
+  .encryption-dialog
+    background: rgba(darken($color-bg, 5%), 0.8)
+    border: 1px solid darken($color-bg, 10%)
+    padding: 0.5rem
+    border-radius: 4px
+    opacity: 0
+    visibility: hidden
+    transition: opacity 200ms ease-in 0ms, visibility 0ms ease-in 200ms
+    position: absolute
+
+    &.encryption-dialog-visible
+      visibility: visible
+      opacity: 1
+      transition: opacity 200ms ease-in 0ms, visibility 0ms ease-in 0ms
+
+    .encryption-form
+      white-space: nowrap
+
+    // width: 300px
+    left: 100%
+    top: 2px
+
+    input, button
+      padding: 15px 10px
+      border-radius: 4px
+
+    input
+      min-width: 200px
+      border: none
+      border-color: transparent
+      border-bottom: 2px solid darken(#fff, 10%)
+      color: black
+      background-color: white
+      transition: border-radius 100ms ease-in, border-color 100ms ease-in
+
+    input[type=password]
+      margin-right: 0.5rem
+
+    input[type=submit], button
+      @include button($color-primary, $color-warning)
+
+    .note
+      color: $color-warning
+      font-size: 0.8rem
+      text-shadow: 0 0 2px black
+
+      p:last-child
+        margin-bottom: 0
+
+  position: absolute
+  display: flex
+  flex-direction: column
+  gap: 1rem
+  padding: 1rem
+  z-index: $z-index-toolbar
+  // on icons are hidden by default
+
+  &.toolbar-call
+    bottom: 1rem
+    left: 50%
+    margin-left: -200px
+    flex-direction: row
+
+  .icon
+    position: relative
+    font-size: 24px
+    color: #fff
+    width: 48px
+    height: 48px
+    border-radius: 48px
+    background-color: rgba(0, 0, 0, 0.2)
+    transition: all .1s
+    transition-timing-function: ease-in-out
+    padding: 12px
+
+    .badge
+      font-family: sans-serif
+      font-weight: bold
+      color: white
+      position: absolute
+      font-size: 12px
+      left: 0
+      right: 0
+      text-align: center
+      bottom: 2px
+
+  .tooltip
+    margin-left: 0.5rem
+    opacity: 0
+    visibility: hidden
+    color: white
+    text-shadow: 0 0 5px black
+    transition: opacity 200ms ease-in 25ms, transform 100ms ease-in
+    transform: translateX(-100%)
+    pointer-events: none
+    position: absolute
+    left: 100%
+    top: 0
+    bottom: 0
+    white-space: nowrap
+    line-height: 48px
+
+
+  &.toolbar-call .tooltip
+    margin-left: 0
+    top: inherit
+    bottom: 100%
+    transform: translateY(100%)
+    width: 80px
+    left: calc(-40px + 50%)
+    text-align: center
+
+
+  .button
+    outline: none
+    text-decoration: none
+    display: flex
+    flex-direction: row
+    align-items: center
+    cursor: pointer
+    position: relative
+
+    &.hangup .icon
+      background-color: #dd2c00
+
+    &:hover
+      .icon
+        box-shadow: 2px 2px 24px rgba(white, 0.1)
+        cursor: pointer
+        background-color: #407cf7
+
+      &.hangup .icon
+        background-color: darken(#dd2c00, 5%)
+
+      .tooltip
+        opacity: 1
+        visibility: visible
+        transform: translateX(0)
+
+
+    &.on .icon
+      background: lighten(#407cf7, 10%)
+
+  .buttons-row
+    display: flex
+    border-radius: 48px
+    box-shadow: 2px 2px 24px rgba(black, 0.3)
+
+    .button:not(.button:first-child)
+      .icon
+        border-top-left-radius: 0
+        border-bottom-left-radius: 0
+        width: 32px
+        padding-left: 3px
+        padding-right: 3px
+
+    .button:not(.button:last-child)
+      .icon
+        border-top-right-radius: 0
+        border-bottom-right-radius: 0
+
+  @media (max-width: 400px)
+    gap: 0.25rem
+
+    &.toolbar-call
+      margin-left: -136px
+
+    .icon
+      width: 32px
+      height: 32px
+      font-size: 16px
+      line-height: 10px
+      padding: 0.5rem
+
+    .tooltip
+      font-size: 0.8rem
+
+  .dropdown-list::after
+    position: absolute
+    content: ' '
+    border: 0.8rem solid transparent
+    border-top: 1rem solid white
+    left: 50%
+    transform: translateX(-50%)
+
+  .toolbar-btn-chat.blink .icon
+    -webkit-animation: bg-blink 1s infinite
+    -moz-animation: bg-blink 1s infinite
+    animation: bg-blink 1s infinite
+
+@-webkit-keyframes bg_blink
+  50%
+    background-color: #407cf7
+
+  99%
+    background-color: #407cf7
+
+@-moz-keyframes bg-blink
+  50%
+    background-color: #407cf7
+
+
+  99%
+    background-color: #407cf7
+
+@keyframes bg-blink
+  50%
+    background-color: #407cf7
+
+  99%
+    background-color: #407cf7
+

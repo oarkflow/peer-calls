@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Peer Call</title>
+  {{template "header" .}}
+</head>
+<body class="call">
+<input type="hidden" id="config" value="{{.Data}}">
+<div id="container"></div>
+<noscript>JavaScript must be enabled for this application</noscript>
+<script src="{{.BaseURL}}/static/index.js?{{.Version}}"></script>
+</body>
+</html>
