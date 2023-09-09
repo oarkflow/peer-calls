@@ -1,25 +1,25 @@
 package server
 
 import (
-  "github.com/juju/errors"
-  "github.com/pion/webrtc/v3"
+	"github.com/juju/errors"
+	"github.com/oarkflow/webrtc"
 
-  "github.com/oarkflow/peer-calls/server/logger"
+	"github.com/oarkflow/peer-calls/server/logger"
 )
 
 func NewNetworkTypes(log logger.Logger, networkTypes []string) (ret []webrtc.NetworkType) {
-  log = log.WithNamespaceAppended("network_types")
+	log = log.WithNamespaceAppended("network_types")
 
-  for _, networkType := range networkTypes {
-    nt, err := webrtc.NewNetworkType(networkType)
-    if err != nil {
-      log.Error("NewNetworkType", errors.Trace(err), nil)
+	for _, networkType := range networkTypes {
+		nt, err := webrtc.NewNetworkType(networkType)
+		if err != nil {
+			log.Error("NewNetworkType", errors.Trace(err), nil)
 
-      continue
-    }
+			continue
+		}
 
-    ret = append(ret, nt)
-  }
+		ret = append(ret, nt)
+	}
 
-  return ret
+	return ret
 }

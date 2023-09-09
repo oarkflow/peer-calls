@@ -1,18 +1,19 @@
 package main
 
 import (
-  "context"
-  "embed"
-  "io/fs"
-  "os"
+	"context"
+	"embed"
+	"io/fs"
+	"os"
 
-  "github.com/juju/errors"
-  "github.com/oarkflow/peer-calls/server"
-  "github.com/oarkflow/peer-calls/server/cli"
-  "github.com/oarkflow/peer-calls/server/logformatter"
-  "github.com/oarkflow/peer-calls/server/logger"
-  "github.com/oarkflow/peer-calls/server/multierr"
-  "github.com/spf13/pflag"
+	"github.com/juju/errors"
+	"github.com/spf13/pflag"
+
+	"github.com/oarkflow/peer-calls/server"
+	"github.com/oarkflow/peer-calls/server/cli"
+	"github.com/oarkflow/peer-calls/server/logformatter"
+	"github.com/oarkflow/peer-calls/server/logger"
+	"github.com/oarkflow/peer-calls/server/multierr"
 )
 
 //nolint:gochecknoglobals
@@ -32,53 +33,53 @@ var resourcesFS embed.FS
 var GitDescribe = "v0.0.0"
 
 func mustSub(dir fs.FS, path string) fs.FS {
-  fs, err := fs.Sub(dir, path)
-  if err != nil {
-    panic(err)
-  }
+	fs, err := fs.Sub(dir, path)
+	if err != nil {
+		panic(err)
+	}
 
-  return fs
+	return fs
 }
 
 func start(ctx context.Context, log logger.Logger, args []string) error {
-  err := cli.Exec(ctx, cli.Props{
-    Log:     log,
-    Version: GitDescribe,
-    Args:    args,
-    Embed: server.Embed{
-      Resources: mustSub(resourcesFS, "res"),
-      Templates: mustSub(templatesFS, "server/templates"),
-      Static:    mustSub(staticFS, "build"),
-    },
-  })
+	err := cli.Exec(ctx, cli.Props{
+		Log:     log,
+		Version: GitDescribe,
+		Args:    args,
+		Embed: server.Embed{
+			Resources: mustSub(resourcesFS, "res"),
+			Templates: mustSub(templatesFS, "server/templates"),
+			Static:    mustSub(staticFS, "build"),
+		},
+	})
 
-  return errors.Trace(err)
+	return errors.Trace(err)
 }
 
 func main() {
-  log := logger.New().
-    WithConfig(
-      logger.NewConfig(logger.ConfigMap{
-        "**:sdp":          logger.LevelError,
-        "**:ws":           logger.LevelError,
-        "**:nack":         logger.LevelError,
-        "**:signaller:**": logger.LevelError,
-        "**:pion:**":      logger.LevelWarn,
-        "**:pubsub":       logger.LevelTrace,
-        "**:factory":      logger.LevelTrace,
-        "":                logger.LevelInfo,
-      }),
-    ).
-    WithConfig(logger.NewConfigFromString(os.Getenv("PEERCALLS_LOG"))).
-    WithFormatter(logformatter.New()).
-    WithNamespaceAppended("main")
+	log := logger.New().
+		WithConfig(
+			logger.NewConfig(logger.ConfigMap{
+				"**:sdp":          logger.LevelError,
+				"**:ws":           logger.LevelError,
+				"**:nack":         logger.LevelError,
+				"**:signaller:**": logger.LevelError,
+				"**:pion:**":      logger.LevelWarn,
+				"**:pubsub":       logger.LevelTrace,
+				"**:factory":      logger.LevelTrace,
+				"":                logger.LevelInfo,
+			}),
+		).
+		WithConfig(logger.NewConfigFromString(os.Getenv("PEERCALLS_LOG"))).
+		WithFormatter(logformatter.New()).
+		WithNamespaceAppended("main")
 
-  err := start(context.Background(), log, os.Args[1:])
+	err := start(context.Background(), log, os.Args[1:])
 
-  if multierr.Is(err, pflag.ErrHelp) {
-    os.Exit(1)
-  } else if err != nil {
-    log.Error("Command error", errors.Trace(err), nil)
-    os.Exit(1)
-  }
+	if multierr.Is(err, pflag.ErrHelp) {
+		os.Exit(1)
+	} else if err != nil {
+		log.Error("Command error", errors.Trace(err), nil)
+		os.Exit(1)
+	}
 }

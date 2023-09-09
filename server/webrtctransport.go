@@ -1,540 +1,540 @@
 package server
 
 import (
-  "net"
-  "strings"
-  "sync"
+	"net"
+	"strings"
+	"sync"
 
-  "github.com/juju/errors"
-  "github.com/pion/interceptor"
-  "github.com/pion/rtcp"
-  "github.com/pion/webrtc/v3"
+	"github.com/juju/errors"
+	"github.com/oarkflow/webrtc"
+	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
 
-  "github.com/oarkflow/peer-calls/server/codecs"
-  "github.com/oarkflow/peer-calls/server/identifiers"
-  "github.com/oarkflow/peer-calls/server/logger"
-  "github.com/oarkflow/peer-calls/server/message"
-  "github.com/oarkflow/peer-calls/server/pionlogger"
-  "github.com/oarkflow/peer-calls/server/transport"
+	"github.com/oarkflow/peer-calls/server/codecs"
+	"github.com/oarkflow/peer-calls/server/identifiers"
+	"github.com/oarkflow/peer-calls/server/logger"
+	"github.com/oarkflow/peer-calls/server/message"
+	"github.com/oarkflow/peer-calls/server/pionlogger"
+	"github.com/oarkflow/peer-calls/server/transport"
 )
 
 type WebRTCTransportFactory struct {
-  log           logger.Logger
-  iceServers    []ICEServer
-  codecRegistry *codecs.Registry
-  settingEngine webrtc.SettingEngine
+	log           logger.Logger
+	iceServers    []ICEServer
+	codecRegistry *codecs.Registry
+	settingEngine webrtc.SettingEngine
 }
 
 func NewWebRTCTransportFactory(
-  log logger.Logger,
-  iceServers []ICEServer,
-  sfuConfig NetworkConfigSFU,
+	log logger.Logger,
+	iceServers []ICEServer,
+	sfuConfig NetworkConfigSFU,
 ) *WebRTCTransportFactory {
-  allowedInterfaces := map[string]struct{}{}
-  for _, iface := range sfuConfig.Interfaces {
-    allowedInterfaces[iface] = struct{}{}
-  }
+	allowedInterfaces := map[string]struct{}{}
+	for _, iface := range sfuConfig.Interfaces {
+		allowedInterfaces[iface] = struct{}{}
+	}
 
-  log = log.WithNamespaceAppended("webrtc_transport_factory")
+	log = log.WithNamespaceAppended("webrtc_transport_factory")
 
-  settingEngine := webrtc.SettingEngine{
-    LoggerFactory: pionlogger.NewFactory(log),
-    BufferFactory: nil,
-  }
+	settingEngine := webrtc.SettingEngine{
+		LoggerFactory: pionlogger.NewFactory(log),
+		BufferFactory: nil,
+	}
 
-  networkTypes := NewNetworkTypes(log, sfuConfig.Protocols)
-  settingEngine.SetNetworkTypes(networkTypes)
+	networkTypes := NewNetworkTypes(log, sfuConfig.Protocols)
+	settingEngine.SetNetworkTypes(networkTypes)
 
-  if udp := sfuConfig.UDP; udp.PortMin > 0 && udp.PortMax > 0 {
-    logCtx := logger.Ctx{
-      "port_min": udp.PortMin,
-      "port_max": udp.PortMax,
-    }
+	if udp := sfuConfig.UDP; udp.PortMin > 0 && udp.PortMax > 0 {
+		logCtx := logger.Ctx{
+			"port_min": udp.PortMin,
+			"port_max": udp.PortMax,
+		}
 
-    if err := settingEngine.SetEphemeralUDPPortRange(udp.PortMin, udp.PortMax); err != nil {
-      err = errors.Trace(err)
-      log.Error("Set epheremal UDP port range", errors.Trace(err), logCtx)
-    } else {
-      log.Info("Set epheremal UDP port range", logCtx)
-    }
-  }
+		if err := settingEngine.SetEphemeralUDPPortRange(udp.PortMin, udp.PortMax); err != nil {
+			err = errors.Trace(err)
+			log.Error("Set epheremal UDP port range", errors.Trace(err), logCtx)
+		} else {
+			log.Info("Set epheremal UDP port range", logCtx)
+		}
+	}
 
-  tcpEnabled := false
+	tcpEnabled := false
 
-  for _, networkType := range networkTypes {
-    if networkType == webrtc.NetworkTypeTCP4 || networkType == webrtc.NetworkTypeTCP6 {
-      tcpEnabled = true
+	for _, networkType := range networkTypes {
+		if networkType == webrtc.NetworkTypeTCP4 || networkType == webrtc.NetworkTypeTCP6 {
+			tcpEnabled = true
 
-      break
-    }
-  }
+			break
+		}
+	}
 
-  if tcpEnabled {
-    tcpAddr := &net.TCPAddr{
-      IP:   net.ParseIP(sfuConfig.TCPBindAddr),
-      Port: sfuConfig.TCPListenPort,
-      Zone: "",
-    }
+	if tcpEnabled {
+		tcpAddr := &net.TCPAddr{
+			IP:   net.ParseIP(sfuConfig.TCPBindAddr),
+			Port: sfuConfig.TCPListenPort,
+			Zone: "",
+		}
 
-    logCtx := logger.Ctx{
-      "remote_addr": tcpAddr,
-    }
+		logCtx := logger.Ctx{
+			"remote_addr": tcpAddr,
+		}
 
-    tcpListener, err := net.ListenTCP("tcp", tcpAddr)
+		tcpListener, err := net.ListenTCP("tcp", tcpAddr)
 
-    if err != nil {
-      log.Error("Start TCP listener", errors.Trace(err), logCtx)
-    } else {
-      log.Info("Start TCP listener", logCtx)
+		if err != nil {
+			log.Error("Start TCP listener", errors.Trace(err), logCtx)
+		} else {
+			log.Info("Start TCP listener", logCtx)
 
-      logger := settingEngine.LoggerFactory.NewLogger("ice-tcp")
-      settingEngine.SetICETCPMux(webrtc.NewICETCPMux(logger, tcpListener, 32))
-    }
-  }
+			logger := settingEngine.LoggerFactory.NewLogger("ice-tcp")
+			settingEngine.SetICETCPMux(webrtc.NewICETCPMux(logger, tcpListener, 32))
+		}
+	}
 
-  registry := codecs.NewRegistryDefault()
+	registry := codecs.NewRegistryDefault()
 
-  if len(allowedInterfaces) > 0 {
-    settingEngine.SetInterfaceFilter(func(iface string) bool {
-      _, ok := allowedInterfaces[iface]
+	if len(allowedInterfaces) > 0 {
+		settingEngine.SetInterfaceFilter(func(iface string) bool {
+			_, ok := allowedInterfaces[iface]
 
-      return ok
-    })
-  }
+			return ok
+		})
+	}
 
-  return &WebRTCTransportFactory{log, iceServers, registry, settingEngine}
+	return &WebRTCTransportFactory{log, iceServers, registry, settingEngine}
 }
 
 func NewMediaEngine() *webrtc.MediaEngine {
-  var mediaEngine webrtc.MediaEngine
+	var mediaEngine webrtc.MediaEngine
 
-  registry := codecs.NewRegistryDefault()
+	registry := codecs.NewRegistryDefault()
 
-  RegisterCodecs(&mediaEngine, registry)
+	RegisterCodecs(&mediaEngine, registry)
 
-  return &mediaEngine
+	return &mediaEngine
 }
 
 func NewInterceptorRegistry(mediaEngine *webrtc.MediaEngine) (*interceptor.Registry, error) {
-  interceptorRegistry := &interceptor.Registry{}
+	interceptorRegistry := &interceptor.Registry{}
 
-  if err := webrtc.RegisterDefaultInterceptors(mediaEngine, interceptorRegistry); err != nil {
-    return nil, errors.Annotatef(err, "registering default interceptors")
-  }
+	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, interceptorRegistry); err != nil {
+		return nil, errors.Annotatef(err, "registering default interceptors")
+	}
 
-  return interceptorRegistry, nil
+	return interceptorRegistry, nil
 }
 
 func RegisterCodecs(mediaEngine *webrtc.MediaEngine, registry *codecs.Registry) {
-  // TODO handle errors gracefully.
+	// TODO handle errors gracefully.
 
-  for _, codec := range registry.Audio.CodecParameters {
-    err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeAudio)
-    if err != nil {
-      panic(err)
-    }
-  }
+	for _, codec := range registry.Audio.CodecParameters {
+		err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeAudio)
+		if err != nil {
+			panic(err)
+		}
+	}
 
-  for _, codec := range registry.Video.CodecParameters {
-    err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeVideo)
-    if err != nil {
-      panic(err)
-    }
-  }
+	for _, codec := range registry.Video.CodecParameters {
+		err := mediaEngine.RegisterCodec(codec, webrtc.RTPCodecTypeVideo)
+		if err != nil {
+			panic(err)
+		}
+	}
 
-  for _, ext := range registry.Audio.HeaderExtensions {
-    if err := mediaEngine.RegisterHeaderExtension(
-      webrtc.RTPHeaderExtensionCapability{
-        URI: ext.Parameter.URI,
-      },
-      webrtc.RTPCodecTypeAudio,
-      ext.AllowedDirections...,
-    ); err != nil {
-      panic(err)
-    }
-  }
+	for _, ext := range registry.Audio.HeaderExtensions {
+		if err := mediaEngine.RegisterHeaderExtension(
+			webrtc.RTPHeaderExtensionCapability{
+				URI: ext.Parameter.URI,
+			},
+			webrtc.RTPCodecTypeAudio,
+			ext.AllowedDirections...,
+		); err != nil {
+			panic(err)
+		}
+	}
 
-  for _, ext := range registry.Video.HeaderExtensions {
-    if err := mediaEngine.RegisterHeaderExtension(
-      webrtc.RTPHeaderExtensionCapability{
-        URI: ext.Parameter.URI,
-      },
-      webrtc.RTPCodecTypeAudio,
-      ext.AllowedDirections...,
-    ); err != nil {
-      panic(err)
-    }
-  }
+	for _, ext := range registry.Video.HeaderExtensions {
+		if err := mediaEngine.RegisterHeaderExtension(
+			webrtc.RTPHeaderExtensionCapability{
+				URI: ext.Parameter.URI,
+			},
+			webrtc.RTPCodecTypeAudio,
+			ext.AllowedDirections...,
+		); err != nil {
+			panic(err)
+		}
+	}
 }
 
 type WebRTCTransport struct {
-  mu sync.RWMutex
+	mu sync.RWMutex
 
-  log logger.Logger
+	log logger.Logger
 
-  clientID identifiers.ClientID
-  peerID   identifiers.PeerID
+	clientID identifiers.ClientID
+	peerID   identifiers.PeerID
 
-  peerConnection  *webrtc.PeerConnection
-  signaller       *Signaller
-  dataTransceiver *DataTransceiver
+	peerConnection  *webrtc.PeerConnection
+	signaller       *Signaller
+	dataTransceiver *DataTransceiver
 
-  codecRegistry *codecs.Registry
+	codecRegistry *codecs.Registry
 
-  remoteTracksChannel chan transport.TrackRemoteWithRTCPReader
+	remoteTracksChannel chan transport.TrackRemoteWithRTCPReader
 
-  localTracks map[identifiers.TrackID]localTrack
+	localTracks map[identifiers.TrackID]localTrack
 }
 
 func (f WebRTCTransportFactory) NewWebRTCTransport(
-  roomID identifiers.RoomID,
-  clientID identifiers.ClientID,
-  peerID identifiers.PeerID,
+	roomID identifiers.RoomID,
+	clientID identifiers.ClientID,
+	peerID identifiers.PeerID,
 ) (*WebRTCTransport, error) {
-  webrtcICEServers := []webrtc.ICEServer{}
+	webrtcICEServers := []webrtc.ICEServer{}
 
-  for _, iceServer := range GetICEAuthServers(f.iceServers) {
-    var c webrtc.ICECredentialType
-    if iceServer.Username != "" && iceServer.Credential != "" {
-      c = webrtc.ICECredentialTypePassword
-    }
+	for _, iceServer := range GetICEAuthServers(f.iceServers) {
+		var c webrtc.ICECredentialType
+		if iceServer.Username != "" && iceServer.Credential != "" {
+			c = webrtc.ICECredentialTypePassword
+		}
 
-    webrtcICEServers = append(webrtcICEServers, webrtc.ICEServer{
-      URLs:           iceServer.URLs,
-      CredentialType: c,
-      Username:       iceServer.Username,
-      Credential:     iceServer.Credential,
-    })
-  }
+		webrtcICEServers = append(webrtcICEServers, webrtc.ICEServer{
+			URLs:           iceServer.URLs,
+			CredentialType: c,
+			Username:       iceServer.Username,
+			Credential:     iceServer.Credential,
+		})
+	}
 
-  // nolint:exhaustivestruct
-  webrtcConfig := webrtc.Configuration{
-    ICEServers: webrtcICEServers,
-  }
+	// nolint:exhaustivestruct
+	webrtcConfig := webrtc.Configuration{
+		ICEServers: webrtcICEServers,
+	}
 
-  // webrtc.PeerConnection.Close will close the intercetpor of the whole API.
-  // Something odd is happneing in pion/webrtc.  So to keep this clean, we
-  // create a new webrtc.MediaEngine, interceptor.Registry and webrtc.API every
-  // time.
-  mediaEngine := NewMediaEngine()
+	// webrtc.PeerConnection.Close will close the intercetpor of the whole API.
+	// Something odd is happneing in pion/webrtc.  So to keep this clean, we
+	// create a new webrtc.MediaEngine, interceptor.Registry and webrtc.API every
+	// time.
+	mediaEngine := NewMediaEngine()
 
-  interceptorRegistry, err := NewInterceptorRegistry(mediaEngine)
-  if err != nil {
-    f.log.Error("New interceptor registry", errors.Trace(err), nil)
-  }
+	interceptorRegistry, err := NewInterceptorRegistry(mediaEngine)
+	if err != nil {
+		f.log.Error("New interceptor registry", errors.Trace(err), nil)
+	}
 
-  api := webrtc.NewAPI(
-    // TODO the documenet for this method says that mediaEngine can be changed
-    // after the engine is passed to the API. Perhaps we should keep a separate
-    // mediaEngine for each peer connection?
-    webrtc.WithMediaEngine(mediaEngine),
-    webrtc.WithSettingEngine(f.settingEngine),
-    webrtc.WithInterceptorRegistry(interceptorRegistry),
-  )
+	api := webrtc.NewAPI(
+		// TODO the documenet for this method says that mediaEngine can be changed
+		// after the engine is passed to the API. Perhaps we should keep a separate
+		// mediaEngine for each peer connection?
+		webrtc.WithMediaEngine(mediaEngine),
+		webrtc.WithSettingEngine(f.settingEngine),
+		webrtc.WithInterceptorRegistry(interceptorRegistry),
+	)
 
-  peerConnection, err := api.NewPeerConnection(webrtcConfig)
-  if err != nil {
-    return nil, errors.Annotate(err, "new peer connection")
-  }
+	peerConnection, err := api.NewPeerConnection(webrtcConfig)
+	if err != nil {
+		return nil, errors.Annotate(err, "new peer connection")
+	}
 
-  return NewWebRTCTransport(f.log, roomID, clientID, peerID, true, peerConnection, f.codecRegistry)
+	return NewWebRTCTransport(f.log, roomID, clientID, peerID, true, peerConnection, f.codecRegistry)
 }
 
 func NewWebRTCTransport(
-  log logger.Logger,
-  roomID identifiers.RoomID,
-  clientID identifiers.ClientID,
-  peerID identifiers.PeerID,
-  initiator bool,
-  peerConnection *webrtc.PeerConnection,
-  codecRegistry *codecs.Registry,
+	log logger.Logger,
+	roomID identifiers.RoomID,
+	clientID identifiers.ClientID,
+	peerID identifiers.PeerID,
+	initiator bool,
+	peerConnection *webrtc.PeerConnection,
+	codecRegistry *codecs.Registry,
 ) (*WebRTCTransport, error) {
-  log = log.WithNamespaceAppended("webrtc_transport").WithCtx(logger.Ctx{
-    "client_id": clientID,
-    "room_id":   roomID,
-  })
+	log = log.WithNamespaceAppended("webrtc_transport").WithCtx(logger.Ctx{
+		"client_id": clientID,
+		"room_id":   roomID,
+	})
 
-  closePeer := func(reason error) error {
-    var errs MultiErrorHandler
+	closePeer := func(reason error) error {
+		var errs MultiErrorHandler
 
-    errs.Add(reason)
+		errs.Add(reason)
 
-    err := peerConnection.Close()
-    if err != nil {
-      errs.Add(errors.Annotatef(err, "close peer connection"))
-    }
+		err := peerConnection.Close()
+		if err != nil {
+			errs.Add(errors.Annotatef(err, "close peer connection"))
+		}
 
-    return errors.Trace(errs.Err())
-  }
+		return errors.Trace(errs.Err())
+	}
 
-  var (
-    dataChannel *webrtc.DataChannel
-    err         error
-  )
+	var (
+		dataChannel *webrtc.DataChannel
+		err         error
+	)
 
-  if initiator {
-    // need to do this to connect with simple peer
-    // only when we are the initiator
-    dataChannel, err = peerConnection.CreateDataChannel("data", nil)
-    if err != nil {
-      return nil, closePeer(errors.Annotate(err, "create data channel"))
-    }
-  }
+	if initiator {
+		// need to do this to connect with simple peer
+		// only when we are the initiator
+		dataChannel, err = peerConnection.CreateDataChannel("data", nil)
+		if err != nil {
+			return nil, closePeer(errors.Annotate(err, "create data channel"))
+		}
+	}
 
-  dataTransceiver := NewDataTransceiver(log, clientID, dataChannel, peerConnection)
+	dataTransceiver := NewDataTransceiver(log, clientID, dataChannel, peerConnection)
 
-  signaller, err := NewSignaller(
-    log,
-    initiator,
-    peerConnection,
-  )
+	signaller, err := NewSignaller(
+		log,
+		initiator,
+		peerConnection,
+	)
 
-  peerConnection.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
-    log.Info("ICE gathering state changed", logger.Ctx{
-      "state": state,
-    })
-  })
+	peerConnection.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
+		log.Info("ICE gathering state changed", logger.Ctx{
+			"state": state,
+		})
+	})
 
-  if err != nil {
-    return nil, closePeer(errors.Annotate(err, "initialize signaller"))
-  }
+	if err != nil {
+		return nil, closePeer(errors.Annotate(err, "initialize signaller"))
+	}
 
-  transport := &WebRTCTransport{
-    log: log,
+	transport := &WebRTCTransport{
+		log: log,
 
-    clientID:        clientID,
-    peerID:          peerID,
-    signaller:       signaller,
-    peerConnection:  peerConnection,
-    dataTransceiver: dataTransceiver,
+		clientID:        clientID,
+		peerID:          peerID,
+		signaller:       signaller,
+		peerConnection:  peerConnection,
+		dataTransceiver: dataTransceiver,
 
-    codecRegistry: codecRegistry,
+		codecRegistry: codecRegistry,
 
-    localTracks: map[identifiers.TrackID]localTrack{},
+		localTracks: map[identifiers.TrackID]localTrack{},
 
-    remoteTracksChannel: make(chan transport.TrackRemoteWithRTCPReader),
-  }
-  peerConnection.OnTrack(transport.handleTrack)
+		remoteTracksChannel: make(chan transport.TrackRemoteWithRTCPReader),
+	}
+	peerConnection.OnTrack(transport.handleTrack)
 
-  go func() {
-    // wait for peer connection to be closed
-    <-signaller.Done()
-    peerConnection.OnTrack(nil)
-    transport.dataTransceiver.Close()
-  }()
-  return transport, nil
+	go func() {
+		// wait for peer connection to be closed
+		<-signaller.Done()
+		peerConnection.OnTrack(nil)
+		transport.dataTransceiver.Close()
+	}()
+	return transport, nil
 }
 
 type localTrack struct {
-  trackInfo   transport.TrackWithMID
-  transceiver *webrtc.RTPTransceiver
-  sender      *webrtc.RTPSender
-  track       *webrtc.TrackLocalStaticRTP
+	trackInfo   transport.TrackWithMID
+	transceiver *webrtc.RTPTransceiver
+	sender      *webrtc.RTPSender
+	track       *webrtc.TrackLocalStaticRTP
 }
 
 func (p *WebRTCTransport) Close() error {
-  return p.signaller.Close()
+	return p.signaller.Close()
 }
 
 func (p *WebRTCTransport) ClientID() identifiers.ClientID {
-  return p.clientID
+	return p.clientID
 }
 
 func (p *WebRTCTransport) Type() transport.Type {
-  return transport.TypeWebRTC
+	return transport.TypeWebRTC
 }
 
 func (p *WebRTCTransport) WriteRTCP(packets []rtcp.Packet) error {
-  p.log.Trace("WriteRTCP", logger.Ctx{
-    "packets": packets,
-  })
+	p.log.Trace("WriteRTCP", logger.Ctx{
+		"packets": packets,
+	})
 
-  err := p.peerConnection.WriteRTCP(packets)
+	err := p.peerConnection.WriteRTCP(packets)
 
-  return errors.Annotate(err, "write rtcp")
+	return errors.Annotate(err, "write rtcp")
 }
 
 func (p *WebRTCTransport) Done() <-chan struct{} {
-  return p.signaller.Done()
+	return p.signaller.Done()
 }
 
 func (p *WebRTCTransport) RemoteTracksChannel() <-chan transport.TrackRemoteWithRTCPReader {
-  return p.remoteTracksChannel
+	return p.remoteTracksChannel
 }
 
 func (p *WebRTCTransport) RemoveTrack(trackID identifiers.TrackID) error {
-  p.mu.Lock()
+	p.mu.Lock()
 
-  pta, ok := p.localTracks[trackID]
-  if ok {
-    delete(p.localTracks, trackID)
-  }
+	pta, ok := p.localTracks[trackID]
+	if ok {
+		delete(p.localTracks, trackID)
+	}
 
-  p.mu.Unlock()
+	p.mu.Unlock()
 
-  if !ok {
-    return errors.Errorf("track %s not found", trackID)
-  }
+	if !ok {
+		return errors.Errorf("track %s not found", trackID)
+	}
 
-  err := p.peerConnection.RemoveTrack(pta.sender)
-  if err != nil {
-    return errors.Annotate(err, "remove track")
-  }
+	err := p.peerConnection.RemoveTrack(pta.sender)
+	if err != nil {
+		return errors.Annotate(err, "remove track")
+	}
 
-  // TODO I don't think this would be necessary if we used
-  // on negotiation needed callback.
-  p.signaller.Negotiate()
+	// TODO I don't think this would be necessary if we used
+	// on negotiation needed callback.
+	p.signaller.Negotiate()
 
-  return nil
+	return nil
 }
 
 var _ transport.Transport = &WebRTCTransport{}
 
 func (p *WebRTCTransport) AddTrack(t transport.Track) (transport.TrackLocal, transport.RTCPReader, error) {
-  codec := t.Codec()
+	codec := t.Codec()
 
-  var rtcpFeedback []webrtc.RTCPFeedback
+	var rtcpFeedback []webrtc.RTCPFeedback
 
-  codecParameters, _ := p.codecRegistry.FuzzySearch(codec)
+	codecParameters, _ := p.codecRegistry.FuzzySearch(codec)
 
-  if strings.HasPrefix(codec.MimeType, "video/") {
-    rtcpFeedback = codecParameters.RTCPFeedback
-  }
+	if strings.HasPrefix(codec.MimeType, "video/") {
+		rtcpFeedback = codecParameters.RTCPFeedback
+	}
 
-  capability := webrtc.RTPCodecCapability{
-    MimeType:     codec.MimeType,
-    ClockRate:    codec.ClockRate,
-    Channels:     codec.Channels,
-    SDPFmtpLine:  codec.SDPFmtpLine,
-    RTCPFeedback: rtcpFeedback,
-  }
+	capability := webrtc.RTPCodecCapability{
+		MimeType:     codec.MimeType,
+		ClockRate:    codec.ClockRate,
+		Channels:     codec.Channels,
+		SDPFmtpLine:  codec.SDPFmtpLine,
+		RTCPFeedback: rtcpFeedback,
+	}
 
-  trackID := t.TrackID()
+	trackID := t.TrackID()
 
-  track, err := webrtc.NewTrackLocalStaticRTP(capability, trackID.ID, trackID.StreamID)
-  if err != nil {
-    return nil, nil, errors.Annotate(err, "new track")
-  }
+	track, err := webrtc.NewTrackLocalStaticRTP(capability, trackID.ID, trackID.StreamID)
+	if err != nil {
+		return nil, nil, errors.Annotate(err, "new track")
+	}
 
-  sender, err := p.peerConnection.AddTrack(track)
-  if err != nil {
-    return nil, nil, errors.Annotate(err, "add track")
-  }
+	sender, err := p.peerConnection.AddTrack(track)
+	if err != nil {
+		return nil, nil, errors.Annotate(err, "add track")
+	}
 
-  if p.signaller.Initiator() {
-    p.signaller.Negotiate()
-  } else {
-    p.signaller.SendTransceiverRequest(track.Kind(), webrtc.RTPTransceiverDirectionRecvonly)
-  }
+	if p.signaller.Initiator() {
+		p.signaller.Negotiate()
+	} else {
+		p.signaller.SendTransceiverRequest(track.Kind(), webrtc.RTPTransceiverDirectionRecvonly)
+	}
 
-  var transceiver *webrtc.RTPTransceiver
+	var transceiver *webrtc.RTPTransceiver
 
-  for _, tr := range p.peerConnection.GetTransceivers() {
-    if tr.Sender() == sender {
-      transceiver = tr
+	for _, tr := range p.peerConnection.GetTransceivers() {
+		if tr.Sender() == sender {
+			transceiver = tr
 
-      break
-    }
-  }
+			break
+		}
+	}
 
-  mid := transceiver.Mid()
-  _ = mid
+	mid := transceiver.Mid()
+	_ = mid
 
-  trackInfo := transport.NewTrackWithMID(t, mid)
+	trackInfo := transport.NewTrackWithMID(t, mid)
 
-  p.mu.Lock()
-  p.localTracks[t.TrackID()] = localTrack{trackInfo, transceiver, sender, track}
-  p.mu.Unlock()
+	p.mu.Lock()
+	p.localTracks[t.TrackID()] = localTrack{trackInfo, transceiver, sender, track}
+	p.mu.Unlock()
 
-  tt := LocalTrack{
-    TrackLocalStaticRTP: track,
-    track:               t,
-  }
+	tt := LocalTrack{
+		TrackLocalStaticRTP: track,
+		track:               t,
+	}
 
-  return tt, sender, nil
+	return tt, sender, nil
 }
 
 // LocalTracks returns info about sending tracks
 func (p *WebRTCTransport) LocalTracks() []transport.TrackWithMID {
-  p.mu.Lock()
-  defer p.mu.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-  list := make([]transport.TrackWithMID, 0, len(p.localTracks))
+	list := make([]transport.TrackWithMID, 0, len(p.localTracks))
 
-  for _, lti := range p.localTracks {
-    // It is important to reread the Mid in case transceiver got reassigned.
-    list = append(list, transport.NewTrackWithMID(lti.trackInfo, lti.transceiver.Mid()))
-  }
+	for _, lti := range p.localTracks {
+		// It is important to reread the Mid in case transceiver got reassigned.
+		list = append(list, transport.NewTrackWithMID(lti.trackInfo, lti.transceiver.Mid()))
+	}
 
-  return list
+	return list
 }
 
 func (p *WebRTCTransport) handleTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-  rtpCodecParameters := track.Codec()
+	rtpCodecParameters := track.Codec()
 
-  codec := transport.Codec{
-    MimeType:    rtpCodecParameters.MimeType,
-    ClockRate:   rtpCodecParameters.ClockRate,
-    Channels:    rtpCodecParameters.Channels,
-    SDPFmtpLine: rtpCodecParameters.SDPFmtpLine,
-  }
+	codec := transport.Codec{
+		MimeType:    rtpCodecParameters.MimeType,
+		ClockRate:   rtpCodecParameters.ClockRate,
+		Channels:    rtpCodecParameters.Channels,
+		SDPFmtpLine: rtpCodecParameters.SDPFmtpLine,
+	}
 
-  t := RemoteTrack{
-    TrackRemote: track,
-    track:       transport.NewSimpleTrack(track.ID(), track.StreamID(), codec, p.peerID),
-  }
+	t := RemoteTrack{
+		TrackRemote: track,
+		track:       transport.NewSimpleTrack(track.ID(), track.StreamID(), codec, p.peerID),
+	}
 
-  trwr := transport.TrackRemoteWithRTCPReader{
-    TrackRemote: t,
-    RTCPReader:  receiver,
-  }
+	trwr := transport.TrackRemoteWithRTCPReader{
+		TrackRemote: t,
+		RTCPReader:  receiver,
+	}
 
-  select {
-  case p.remoteTracksChannel <- trwr:
-  case <-p.signaller.Done():
-  }
+	select {
+	case p.remoteTracksChannel <- trwr:
+	case <-p.signaller.Done():
+	}
 
-  // TODO prometheus, move this to pubsub.
+	// TODO prometheus, move this to pubsub.
 
-  // prometheusWebRTCTracksTotal.Inc()
-  // prometheusWebRTCTracksActive.Inc()
+	// prometheusWebRTCTracksTotal.Inc()
+	// prometheusWebRTCTracksActive.Inc()
 
-  // 		prometheusWebRTCTracksActive.Dec()
-  // 		prometheusWebRTCTracksDuration.Observe(time.Since(start).Seconds())
+	// 		prometheusWebRTCTracksActive.Dec()
+	// 		prometheusWebRTCTracksDuration.Observe(time.Since(start).Seconds())
 }
 
 func (p *WebRTCTransport) Signal(signal message.Signal) error {
-  err := p.signaller.Signal(signal)
+	err := p.signaller.Signal(signal)
 
-  return errors.Annotate(err, "signal")
+	return errors.Annotate(err, "signal")
 }
 
 func (p *WebRTCTransport) SignalChannel() <-chan message.Signal {
-  return p.signaller.SignalChannel()
+	return p.signaller.SignalChannel()
 }
 
 func (p *WebRTCTransport) MessagesChannel() <-chan webrtc.DataChannelMessage {
-  return p.dataTransceiver.MessagesChannel()
+	return p.dataTransceiver.MessagesChannel()
 }
 
 func (p *WebRTCTransport) Send(message webrtc.DataChannelMessage) <-chan error {
-  return p.dataTransceiver.Send(message)
+	return p.dataTransceiver.Send(message)
 }
 
 type LocalTrack struct {
-  *webrtc.TrackLocalStaticRTP
-  track transport.Track
+	*webrtc.TrackLocalStaticRTP
+	track transport.Track
 }
 
 func (t LocalTrack) Track() transport.Track {
-  return t.track
+	return t.track
 }
 
 type RemoteTrack struct {
-  *webrtc.TrackRemote
-  track transport.Track
+	*webrtc.TrackRemote
+	track transport.Track
 }
 
 func (t RemoteTrack) Track() transport.Track {
-  return t.track
+	return t.track
 }

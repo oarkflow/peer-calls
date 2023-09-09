@@ -1,45 +1,45 @@
 package transport
 
 import (
-  "strings"
+	"strings"
 
-  "github.com/pion/webrtc/v3"
+	"github.com/oarkflow/webrtc"
 )
 
 type Codec struct {
-  MimeType    string `json:"mimeType"`
-  ClockRate   uint32 `json:"clockRate"`
-  Channels    uint16 `json:"channels"`
-  SDPFmtpLine string `json:"sdpFmtpLine"`
+	MimeType    string `json:"mimeType"`
+	ClockRate   uint32 `json:"clockRate"`
+	Channels    uint16 `json:"channels"`
+	SDPFmtpLine string `json:"sdpFmtpLine"`
 }
 
 func (c Codec) TrackKind() TrackKind {
-  if strings.HasPrefix(c.MimeType, "audio/") {
-    return TrackKindAudio
-  }
+	if strings.HasPrefix(c.MimeType, "audio/") {
+		return TrackKindAudio
+	}
 
-  return TrackKindVideo
+	return TrackKindVideo
 }
 
 type TrackKind string
 
 const (
-  TrackKindAudio TrackKind = "audio"
-  TrackKindVideo TrackKind = "video"
+	TrackKindAudio TrackKind = "audio"
+	TrackKindVideo TrackKind = "video"
 )
 
 func NewTrackKind(codecType webrtc.RTPCodecType) TrackKind {
-  if codecType == webrtc.RTPCodecTypeAudio {
-    return TrackKindAudio
-  }
+	if codecType == webrtc.RTPCodecTypeAudio {
+		return TrackKindAudio
+	}
 
-  return TrackKindVideo
+	return TrackKindVideo
 }
 
 func (t TrackKind) RTPCodecType() webrtc.RTPCodecType {
-  if t == TrackKindAudio {
-    return webrtc.RTPCodecTypeAudio
-  }
+	if t == TrackKindAudio {
+		return webrtc.RTPCodecTypeAudio
+	}
 
-  return webrtc.RTPCodecTypeVideo
+	return webrtc.RTPCodecTypeVideo
 }
